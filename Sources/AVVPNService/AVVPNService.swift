@@ -25,7 +25,19 @@ public class AVVPNService {
     }
 
     public func disconnect() {
-        vpnManager.connection.stopVPNTunnel()
+        // Отключаем on-demand, чтобы VPN не восстанавливался автоматически
+        vpnManager.loadFromPreferences { [weak self] error in
+            guard let self = self else { return }
+            guard error == nil else {
+                print("⚠️ Could not load VPN Configuration: \(error!.localizedDescription)")
+                self.vpnManager.connection.stopVPNTunnel()
+                return
+            }
+            self.vpnManager.isOnDemandEnabled = false
+            self.vpnManager.saveToPreferences { _ in
+                self.vpnManager.connection.stopVPNTunnel()
+            }
+        }
     }
 
     public func removeConfiguration( _ completion: ((Error?) -> Void)? = nil) {
@@ -118,6 +130,14 @@ private extension AVVPNService {
                 self.vpnManager.isEnabled = true
                 self.vpnManager.localizedDescription = credentials.title
                 self.vpnManager.protocolConfiguration = self.delegate?.getProtocolConfiguration(credentials) ?? self.getProtocolConfiguration(credentials)
+                
+                // --- ВСТАВКА ОНДЕМАНД ---
+                let rule = NEOnDemandRuleConnect()
+                rule.interfaceTypeMatch = .any // подключение по любому типу интерфейса
+                self.vpnManager.onDemandRules = [rule]
+                self.vpnManager.isOnDemandEnabled = true
+                // --- конец вставки ---
+                
                 self.vpnManager.saveToPreferences(completionHandler: self.saveHandler(credentials: credentials, completion))
             } else {
                 //Add delay if protocolConfiguration was saved. Otherwise protocolConfiguration won't be reset
