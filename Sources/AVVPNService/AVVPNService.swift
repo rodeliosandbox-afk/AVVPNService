@@ -94,18 +94,48 @@ private extension AVVPNService {
     }
 
     func getProtocolConfiguration(_ credentials: AVVPNCredentials.IKEv2) -> NEVPNProtocolIKEv2 {
-        let configuration = NEVPNProtocolIKEv2()
-        configuration.username = credentials.username
-        configuration.serverAddress = credentials.server
-        configuration.remoteIdentifier = credentials.remoteId
-        configuration.localIdentifier = credentials.localId
-        configuration.authenticationMethod = NEVPNIKEAuthenticationMethod.none
-        let keychain = AVVPNKeychainService();
+        let keychain = AVVPNKeychainService()
         keychain.save(key: AVVPNKeychainService.passwordKey, value: credentials.password)
-        configuration.passwordReference = keychain.load(key: AVVPNKeychainService.passwordKey)
-        configuration.useExtendedAuthentication = true
-        configuration.disconnectOnSleep = false
-        return configuration
+
+        let ikev2 = NEVPNProtocolIKEv2()
+
+        ikev2.serverAddress = credentials.server
+        ikev2.remoteIdentifier = credentials.remoteId
+        ikev2.localIdentifier = credentials.localId
+
+        ikev2.authenticationMethod = .none
+        ikev2.useExtendedAuthentication = true
+        ikev2.username = credentials.username
+        ikev2.passwordReference = keychain.load(key: AVVPNKeychainService.passwordKey)
+
+        ikev2.ikeSecurityAssociationParameters.encryptionAlgorithm = .algorithmAES256GCM
+        ikev2.ikeSecurityAssociationParameters.integrityAlgorithm = .SHA384
+        ikev2.ikeSecurityAssociationParameters.diffieHellmanGroup = .group20
+        ikev2.ikeSecurityAssociationParameters.lifetimeMinutes = 480
+
+        ikev2.childSecurityAssociationParameters.encryptionAlgorithm = .algorithmAES256GCM
+        ikev2.childSecurityAssociationParameters.integrityAlgorithm = .SHA384
+        ikev2.childSecurityAssociationParameters.diffieHellmanGroup = .group20
+        ikev2.childSecurityAssociationParameters.lifetimeMinutes = 60
+
+        ikev2.deadPeerDetectionRate = .medium
+        if #available(iOS 14.0, *) {
+            ikev2.includeAllNetworks = true
+        }
+        if #available(iOS 14.2, *) {
+            ikev2.excludeLocalNetworks = false
+        }
+        if #available(iOS 16.4, *) {
+            ikev2.excludeAPNs = false
+            ikev2.excludeCellularServices = false
+        }
+        ikev2.disconnectOnSleep = false
+        ikev2.disableRedirect = true
+        ikev2.enablePFS = true
+        ikev2.disableMOBIKE = false
+        ikev2.enableRevocationCheck = true
+
+        return ikev2
     }
 }
 
